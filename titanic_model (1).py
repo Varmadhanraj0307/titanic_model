@@ -1,193 +1,100 @@
-
-
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier, plot_tree
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, confusion_matrix, classification_report, accuracy_score
-
-df = pd.read_csv("tested.csv")
-
-df.head()
-
-df.tail()
-
-df.info()
-
-df.isnull().sum()
-
-df['Age'] = df['Age'].fillna(df['Age'].mode()[0])
-
-df.isnull().sum()
-
-df['Cabin'] = df['Cabin'].fillna(df['Cabin'].mode()[0])
-
-df.isnull().sum()
-
-df = df.dropna()
-
-df.isnull().sum()
-
-sns.countplot(x='Survived', data=df)
-plt.title("Survival Count")
-plt.show()
-
-sns.countplot(x='Sex', data=df)
-plt.title("Gender Count")
-plt.show()
-
-sns.countplot(x='Pclass', data=df)
-plt.title("Passenger Class Count")
-plt.show()
-
-sns.countplot(x='Sex', hue='Survived', data=df)
-plt.title("Survival by Gender")
-plt.show()
-
-sns.countplot(x='Pclass', hue='Survived', data=df)
-plt.title("Survival by Class")
-plt.show()
-
-sns.countplot(x='Embarked', hue='Survived', data=df)
-plt.title("Survival by Embarked")
-plt.show()
-
-sns.histplot(df['Age'], kde=True)
-plt.title("Age Distribution")
-plt.show()
-
-sns.histplot(df['Fare'], kde=True)
-plt.title("Fare Distribution")
-plt.show()
-
-sns.boxplot(x='Pclass', y='Age', data=df)
-plt.title("Age vs Passenger Class")
-plt.show()
-
-sns.boxplot(x='Pclass', y='Fare', data=df)
-plt.title("Fare vs Passenger Class")
-plt.show()
-
-plt.scatter(df['Age'], df['Fare'])
-plt.xlabel("Age")
-plt.ylabel("Fare")
-plt.title("Age vs Fare")
-plt.show()
-
-corr = df.corr(numeric_only=True)
-
-sns.heatmap(corr, annot=True, cmap='coolwarm')
-plt.title("Correlation Heatmap")
-plt.show()
-
-sns.pairplot(df[['Survived', 'Pclass', 'Age', 'Fare']])
-plt.show()
-
-sns.barplot(x='Pclass', y='Fare', data=df)
-plt.title("Average Fare by Class")
-plt.show()
-
-df['Survived'].value_counts().plot.pie(autopct='%1.1f%%')
-plt.title("Survival Percentage")
-plt.ylabel('')
-plt.show()
-
-sns.violinplot(x='Pclass', y='Age', hue='Survived', data=df, split=True)
-plt.title("Violin Plot: Age vs Class")
-plt.show()
-
-
-df['FamilySize'] = df['SibSp'] + df['Parch']
-
-sns.countplot(x='FamilySize', hue='Survived', data=df)
-plt.title("Family Size vs Survival")
-plt.show()
-
-
-
-
-
-
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import streamlit as st
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 
+# --- APP CONFIGURATION ---
+st.set_page_config(page_title="Titanic Survival Predictor", layout="wide")
 
-st.title("🚢 Titanic Survival Prediction App")
+# --- DATA LOADING ---
+@st.cache_data
+def load_data():
+    # Ensure 'tested.csv' is in your GitHub repo!
+    data = pd.read_csv("tested.csv")
+    
+    # Preprocessing
+    data['Age'] = data['Age'].fillna(data['Age'].median())
+    data['Fare'] = data['Fare'].fillna(data['Fare'].median())
+    data['Embarked'] = data['Embarked'].fillna(data['Embarked'].mode()[0])
+    
+    # Encoding for the model
+    # We create a copy for training so the original remains readable for plots
+    train_df = data.copy()
+    train_df['Sex'] = train_df['Sex'].map({'male': 0, 'female': 1})
+    train_df['Embarked'] = train_df['Embarked'].map({'S': 0, 'C': 1, 'Q': 2})
+    return data, train_df
 
+try:
+    df, df_encoded = load_data()
+except FileNotFoundError:
+    st.error("Error: 'tested.csv' not found. Please upload it to your GitHub repository.")
+    st.stop()
 
-df = pd.read_csv("tested.csv")
+# --- MODEL TRAINING ---
+@st.cache_resource
+def train_models(data):
+    X = data[['Pclass', 'Sex', 'Age', 'Fare', 'Embarked']]
+    y = data['Survived']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    dt = DecisionTreeClassifier()
+    rf = RandomForestClassifier()
+    
+    dt.fit(X_train, y_train)
+    rf.fit(X_train, y_train)
+    return dt, rf
 
+dt_model, rf_model = train_models(df_encoded)
 
-df['Age'].fillna(df['Age'].median(), inplace=True)
-df['Fare'].fillna(df['Fare'].median(), inplace=True)
-df['Embarked'].fillna(df['Embarked'].mode()[0], inplace=True)
-
-
-df['Sex'] = df['Sex'].map({'male': 0, 'female': 1})
-df['Embarked'] = df['Embarked'].map({'S': 0, 'C': 1, 'Q': 2})
-
-
-X = df[['Pclass', 'Sex', 'Age', 'Fare', 'Embarked']]
-y = df['Survived']
-
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-
-
-dt_model = DecisionTreeClassifier()
-rf_model = RandomForestClassifier()
-
-dt_model.fit(X_train, y_train)
-rf_model.fit(X_train, y_train)
-
-
-st.sidebar.header("Enter Passenger Details")
-
-pclass = st.sidebar.selectbox("Pclass", [1, 2, 3])
-sex = st.sidebar.selectbox("Sex", ["male", "female"])
+# --- SIDEBAR INPUTS ---
+st.sidebar.header("🚢 Passenger Details")
+pclass = st.sidebar.selectbox("Passenger Class", [1, 2, 3])
+sex_raw = st.sidebar.selectbox("Gender", ["male", "female"])
 age = st.sidebar.slider("Age", 1, 80, 25)
-fare = st.sidebar.slider("Fare", 0, 500, 50)
-embarked = st.sidebar.selectbox("Embarked", ["S", "C", "Q"])
+fare = st.sidebar.slider("Fare Price", 0, 500, 50)
+embarked_raw = st.sidebar.selectbox("Port of Embarkation", ["S", "C", "Q"])
 
-
-sex = 0 if sex == "male" else 1
-embarked = {"S": 0, "C": 1, "Q": 2}[embarked]
-
+# Map inputs for prediction
+sex = 0 if sex_raw == "male" else 1
+embarked = {"S": 0, "C": 1, "Q": 2}[embarked_raw]
 input_data = np.array([[pclass, sex, age, fare, embarked]])
 
-model_choice = st.selectbox("Choose Model", ["Decision Tree", "Random Forest"])
+# --- MAIN UI ---
+st.title("🚢 Titanic Survival Prediction App")
+st.markdown("Predict if a passenger would survive the Titanic disaster based on their details.")
 
-if st.button("Predict"):
-    if model_choice == "Decision Tree":
-        prediction = dt_model.predict(input_data)
-    else:
-        prediction = rf_model.predict(input_data)
+col1, col2 = st.columns([1, 1])
 
-    if prediction[0] == 1:
-        st.success("🎉 Passenger Survived")
-    else:
-        st.error("💀 Passenger Did Not Survive")
+with col1:
+    st.subheader("Make a Prediction")
+    model_choice = st.selectbox("Choose AI Model", ["Decision Tree", "Random Forest"])
+    
+    if st.button("Predict Survival Status"):
+        prediction = dt_model.predict(input_data) if model_choice == "Decision Tree" else rf_model.predict(input_data)
+        
+        if prediction[0] == 1:
+            st.success("🎉 Results: The passenger likely Survived!")
+        else:
+            st.error("💀 Results: The passenger likely did not survive.")
 
-
-st.subheader("📊 Data Visualization")
-
-plot_option = st.selectbox("Select Plot", ["Survival Count", "Gender Count", "Class Count"])
-
-if plot_option == "Survival Count":
+with col2:
+    st.subheader("📊 Data Visualizations")
+    plot_option = st.selectbox("Select Insight", ["Survival Count", "Gender Distribution", "Class Distribution"])
+    
     fig, ax = plt.subplots()
-    sns.countplot(x='Survived', data=df, ax=ax)
+    if plot_option == "Survival Count":
+        sns.countplot(x='Survived', data=df, ax=ax, palette="viridis")
+    elif plot_option == "Gender Distribution":
+        sns.countplot(x='Sex', data=df, ax=ax, palette="magma")
+    elif plot_option == "Class Distribution":
+        sns.countplot(x='Pclass', data=df, ax=ax, palette="crest")
+    
     st.pyplot(fig)
 
-elif plot_option == "Gender Count":
-    fig, ax = plt.subplots()
-    sns.countplot(x='Sex', data=df, ax=ax)
-    st.pyplot(fig)
-
-elif plot_option == "Class Count":
-    fig, ax = plt.subplots()
-    sns.countplot(x='Pclass', data=df, ax=ax)
-    st.pyplot(fig)
-
-
+st.divider()
+st.write("Current Dataset Preview (First 5 rows):")
+st.dataframe(df.head())
